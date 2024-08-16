@@ -13,7 +13,7 @@ This project implements a content-based recommendation system that fetches news 
    - Installation of necessary packages, including `pandas`, `scikit-learn`, `Streamlit`, and `nltk` for natural language processing.
 
 2. **Data Collection**:
-   - Fetch news articles using The Guardian API. You can do this through the Notebook!
+   - Fetch news articles using The Guardian API. You can do this through the [Notebook](./Data%20Fecthing%20The%20Guardian.ipynb! 
    - Store articles' metadata and content for further processing.
 
 3. **Data Processing**:
