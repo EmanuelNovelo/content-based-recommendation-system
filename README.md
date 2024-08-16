@@ -4,22 +4,22 @@ A content-based recommendation system uses natural language processing and machi
 
 ## Project Overview
 
-This project implements a content-based recommendation system that fetches news articles from The Guardian API, processes them using machine learning techniques, and serves personalized article recommendations through a Streamlit web app. The app allows users to log in, mark articles as liked or disliked, and provides personalized recommendations.
+This project implements a content-based recommendation system that fetches news articles from The Guardian API, processes them using machine learning techniques, and serves personalized article recommendations through a Streamlit web app. The app allows users to log in, read articles, like or dislike them, and read recommendations.
 
 ## Project Workflow
 
 1. **Environment Setup**:
-   - Configuration of a Python development environment using Visual Studio Code.
+   - Configuration of a Python environment using Visual Studio Code.
    - Installation of necessary packages, including `pandas`, `scikit-learn`, `Streamlit`, and `nltk` for natural language processing.
 
 2. **Data Collection**:
-   - Fetch news articles using The Guardian API.
+   - Fetch news articles using The Guardian API. You can do this through the Notebook!
    - Store articles' metadata and content for further processing.
 
 3. **Data Processing**:
    - Clean and preprocess the article data, focusing on key fields like title, body, and publication date.
    - Use `TF-IDF` (Term Frequency-Inverse Document Frequency) to vectorize the text content.
-   - Calculate cosine similarity between articles to determine relatedness.
+   - Calculate cosine similarity between articles to determine similarity.
    - Use `nltk` to include synonyms in the search functionality, enhancing the search experience.
 
 4. **Recommendation System Development**:
@@ -47,7 +47,7 @@ This project implements a content-based recommendation system that fetches news 
 - Provide a user-friendly web application for interacting with the recommendation system.
 - Implement user feedback mechanisms to refine and personalize recommendations.
 
-## How to Run
+## How to Run (Local)
 
 1. Clone the repository to your local machine.
 2. Set up the environment with the necessary packages as described.
@@ -59,4 +59,4 @@ This project implements a content-based recommendation system that fetches news 
 
 - Enhance the model by incorporating user feedback (likes/dislikes) into the recommendation algorithm.
 - Explore additional machine learning algorithms for improving recommendations.
-- Implement a more sophisticated user management system.
+
