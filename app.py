@@ -3,23 +3,39 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from streamlit_option_menu import option_menu
+import nltk
+from nltk.corpus import wordnet
 import os
+import matplotlib.pyplot as plt
+
+# Cache the TF-IDF and similarity calculations to speed up the app
+@st.cache_data
+def get_tfidf_and_similarities(df):
+    tfidf_vectorizer = TfidfVectorizer(stop_words='english')
+    tfidf_matrix = tfidf_vectorizer.fit_transform(df['bodyText'])
+    cosine_similarities = cosine_similarity(tfidf_matrix)
+    return tfidf_vectorizer, cosine_similarities
+
+# Function to expand search query with synonyms
+def expand_query_with_synonyms(query):
+    synonyms = set([query])
+    for word in query.split():
+        for syn in wordnet.synsets(word):
+            for lemma in syn.lemmas():
+                synonyms.add(lemma.name())
+    return " | ".join(synonyms)
 
 # Path to the user file
 user_file_path = 'users/data/users.txt'
-
-# Create the directory and file if they don't exist
 os.makedirs(os.path.dirname(user_file_path), exist_ok=True)
 if not os.path.exists(user_file_path):
     with open(user_file_path, 'w') as f:
-        pass  # Create the empty file
+        pass
 
-# Load users from the file
 def load_users():
     with open(user_file_path, 'r') as f:
         return f.read().splitlines()
 
-# Save a new user to the file
 def save_user(username):
     with open(user_file_path, 'a') as f:
         f.write(username + '\n')
@@ -28,9 +44,18 @@ def save_user(username):
 if 'username' not in st.session_state:
     st.session_state['username'] = ""
 
-# Prompt for username at the start
+if 'read_articles' not in st.session_state:
+    st.session_state['read_articles'] = []
+
+if 'liked_articles' not in st.session_state:
+    st.session_state['liked_articles'] = []
+
+if 'disliked_articles' not in st.session_state:
+    st.session_state['disliked_articles'] = []
+
+
 def prompt_for_username():
-    st.title("Welcome to the Reading Recommendation Tool")
+    st.title("Welcome to the Content-Based Recommendation Tool for The Guardian News")
     st.text("Please choose an option. No personal data is collected.")
     
     option = st.radio("Select an option", ("Sign in with existing user", "Create a new user"))
@@ -59,27 +84,19 @@ def prompt_for_username():
             else:
                 st.error("Please enter a valid username.")
 
-# Show the prompt at the start if no username is set
 if not st.session_state['username']:
     prompt_for_username()
 
-# Verify if a username has been assigned
 if st.session_state['username']:
-    # Load the data
     df = pd.read_csv('./data/guardian_articles_full_content.csv')
     df = df.dropna(subset=['bodyText'])
     df['webPublicationDate'] = pd.to_datetime(df['webPublicationDate'])
 
-    # Vectorization
-    tfidf_vectorizer = TfidfVectorizer(stop_words='english')
-    tfidf_matrix = tfidf_vectorizer.fit_transform(df['bodyText'])
-    cosine_similarities = cosine_similarity(tfidf_matrix)
+    tfidf_vectorizer, cosine_similarities = get_tfidf_and_similarities(df)
 
-    # Configuration of read articles
     if 'read_articles' not in st.session_state:
         st.session_state['read_articles'] = []
 
-    # Function to recommend articles
     def recommend_articles(article_id, num_recommendations=5):
         article_index = df.index[df['id'] == article_id][0]
         sim_scores = list(enumerate(cosine_similarities[article_index]))
@@ -88,27 +105,39 @@ if st.session_state['username']:
         recommended_articles = [df.iloc[i] for i, _ in sim_scores]
         return recommended_articles
 
-    # Function to show instructions
-    def show_instructions():
-        st.title("Instructions and Guide")
+    def show_user_and_instructions():
+        st.title("User & Instructions")
+        st.write(f"**Current User:** {st.session_state['username']}")
         st.write("""
-        Welcome to the Reading Recommendation Tool.
+        Welcome to the Content-Based Recommendation Tool.
         
         1. **Search**: Here you can search for articles by section and title. You can also mark articles as read.
         2. **Recommendation System**: Get recommendations based on the articles you've read.
         3. **Your Articles**: A list of all the articles you have read so far.
         4. **Reset Preferences**: Clear all read articles history and restart the tool.
+        
+        *Remember to visit the 'Recommended Artciles' section to provide your feedback by liking the articles!*
         """)
 
-    # Search section
-    def search_module():
-        st.title('Guardian News Recommendation System - Search')
+        if st.button("Log out or change user"):
+            st.session_state['username'] = ""
+            st.session_state['read_articles'] = []
+            st.stop()
 
-        section = st.selectbox("Choose your preferred news section:", df['sectionName'].unique())
+    def search_module():
+        st.title('Guardian News Contend-Based Recommendation System - Search')
+
+        section = st.selectbox("Choose your preferred news section:", ["All Sections"] + df['sectionName'].unique().tolist())
         search_query = st.text_input("Search for a news article by title:")
 
-        filtered_df = df[(df['sectionName'] == section) & 
-                         (df['webTitle'].str.contains(search_query, case=False))]
+        if search_query:
+            expanded_query = expand_query_with_synonyms(search_query)
+            st.write(f"Expanded query: {expanded_query}")  # This will display the expanded query
+        else:
+            expanded_query = ""
+
+        filtered_df = df if section == "All Sections" else df[df['sectionName'] == section]
+        filtered_df = filtered_df[filtered_df['webTitle'].str.contains(expanded_query, case=False)]
 
         st.subheader('Filtered Articles')
         for i in range(min(5, len(filtered_df))):
@@ -120,13 +149,12 @@ if st.session_state['username']:
             st.write(f"[Read more]({article['webUrl']})")
 
             if article['id'] not in st.session_state['read_articles']:
-                if st.button(f"Mark as Read - {article['webTitle']}", key=f"read-{article['id']}"):
+                if st.button(f"Mark as Read", key=f"read-{article['id']}"):
                     st.session_state['read_articles'].append(article['id'])
             st.write('---')
 
-    # Recommendation System section
     def recommendation_system_module():
-        st.title('Guardian News Recommendation System - Recommendation System')
+        st.title('Guardian News Recommendations')
 
         if len(st.session_state['read_articles']) == 0:
             st.write("Please read an article in the 'Search' tab to generate recommendations.")
@@ -139,9 +167,12 @@ if st.session_state['username']:
                     st.write(f"*Published on:* {article['webPublicationDate']}")
                     st.write(article['bodyText'][:200] + '...')
                     st.write(f"[Read more]({article['webUrl']})")
+                    if st.button(f"I like this!", key=f"like-{article['id']}"):
+                        st.session_state['liked_articles'].append(article['id'])
+                    if st.button(f"I don't like this!", key=f"dislike-{article['id']}"):
+                        st.session_state['disliked_articles'].append(article['id'])
                     st.write('---')
 
-    # Your Articles section
     def your_articles_module():
         st.title('Your Articles')
 
@@ -153,22 +184,58 @@ if st.session_state['username']:
                 st.write(f"**{article['webTitle']}**")
                 st.write(f"*Published on:* {article['webPublicationDate']}")
                 st.write(article['bodyText'][:200] + '...')
-                st.write(f"[Read more]({article['webUrl']})")
+                st.write(f"[Read more]({article['webUrl']})")  # Added "Read more" link
                 st.write('---')
 
-    # Function to reset preferences
+
+    def stats_module():
+        st.title('User Feedback Statistics')
+
+        total_likes = len(st.session_state.get('liked_articles', []))
+        total_dislikes = len(st.session_state.get('disliked_articles', []))
+
+        st.subheader("Your Feedback Summary:")
+        st.write(f"**Total 'I like this!' Articles:** {total_likes}")
+        st.write(f"**Total 'I don't like this!' Articles:** {total_dislikes}")
+        
+        # Display a pie chart only if there's feedback
+        if total_likes > 0 or total_dislikes > 0:
+            feedback_labels = ['Likes', 'Dislikes']
+            feedback_counts = [total_likes, total_dislikes]
+
+            st.write("### Feedback Distribution")
+            st.pyplot(create_feedback_pie_chart(feedback_labels, feedback_counts))
+        else:
+            st.write("No feedback data available to display.")
+
+    def create_feedback_pie_chart(labels, counts):
+        import matplotlib.pyplot as plt
+
+        fig, ax = plt.subplots()
+        
+        # Ensure counts are valid (i.e., no NaN values)
+        counts = [count if not pd.isna(count) else 0 for count in counts]
+        
+        # Create the pie chart only if there are non-zero counts
+        if sum(counts) > 0:
+            ax.pie(counts, labels=labels, autopct='%1.1f%%', startangle=90)
+            ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
+        else:
+            ax.text(0.5, 0.5, 'No Data', horizontalalignment='center', verticalalignment='center')
+
+        return fig
+
+
     def reset_preferences():
         st.session_state['read_articles'] = []
-        st.session_state['username'] = ""
-        st.experimental_rerun()
+        st.stop()
 
-    # Navigation menu
     with st.sidebar:
         st.title("Navigation")
         selection = option_menu(
             menu_title="",
-            options=["Instructions and Guide", "Search", "Recommendation System", "Your Articles"],
-            icons=["info-circle", "search", "bar-chart-fill", "book"],
+            options=["User & Instructions", "Search", "Recommended Articles", "Your Articles", "Stats"],
+            icons=["person-circle", "search", "bar-chart-fill", "book", "graph-up"],
             menu_icon="cast",
             default_index=0,
         )
@@ -176,12 +243,13 @@ if st.session_state['username']:
         if st.button("Reset Preferences"):
             reset_preferences()
 
-    # Navigation logic
-    if selection == "Instructions and Guide":
-        show_instructions()
+    if selection == "User & Instructions":
+        show_user_and_instructions()
     elif selection == "Search":
         search_module()
-    elif selection == "Recommendation System":
+    elif selection == "Recommended Articles":
         recommendation_system_module()
     elif selection == "Your Articles":
         your_articles_module()
+    elif selection == "Stats":
+        stats_module()
